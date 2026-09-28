@@ -12,7 +12,8 @@ license, package and SHA-256 checksum.
 
 Run **Build spoti.pw with Eevee**, providing the successful original build's run
 ID. That run must still contain an accessible `spoti.ipa` artifact. This workflow
-only accepts Spotify 9.1.78. Install the combined IPA using the same Sideloadly
+pins the SHA-256 of the verified Spotify 9.1.78 / spoti.pw 0.22.0 input from run
+`36457343317`; another input requires a new compatibility review. Install the combined IPA using the same Sideloadly
 account and bundle-ID settings as before, without deleting the original app.
 
 Upstream reports 9.1.x support and tested 9.1.58. A successful build does not prove

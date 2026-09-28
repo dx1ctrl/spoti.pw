@@ -32,6 +32,8 @@ jobs:
       BASE_RUN_ID: ${{ inputs.base_run_id || '36457343317' }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
 
       - uses: actions/download-artifact@v5
         with:
@@ -73,6 +75,8 @@ jobs:
       - name: Apply coexistence patch and test it
         run: |
           python3 integrations/eevee/test_prepare_eevee.py deps/eevee
+          python3 -m unittest discover -s integrations/eevee -p 'test_inspect_ipa.py'
+          python3 -m unittest discover -s integrations/eevee -p 'test_verify_package.py'
           python3 integrations/eevee/prepare_eevee.py deps/eevee
 
       - name: Build SwiftProtobuf and Eevee from source
