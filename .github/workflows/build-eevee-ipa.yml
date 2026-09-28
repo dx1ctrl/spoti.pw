@@ -1,0 +1,105 @@
+name: Build spoti.pw with Eevee
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_run_id:
+        description: Successful Build IPA run containing the spoti.ipa artifact
+        required: true
+        default: '36457343317'
+        type: string
+  push:
+    branches: [codex/eevee-integration]
+    paths:
+      - .github/workflows/build-eevee-ipa.yml
+      - integrations/eevee/**
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: eevee-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    env:
+      THEOS: ${{ github.workspace }}/deps/theos
+      EEVEE_COMMIT: 8a9e4c3c1ca9a8991023d8b16be159aa73420017
+      BASE_RUN_ID: ${{ inputs.base_run_id || '36457343317' }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v5
+        with:
+          name: spoti.ipa
+          path: input
+          github-token: ${{ github.token }}
+          run-id: ${{ env.BASE_RUN_ID }}
+
+      - name: Validate input before building
+        run: python3 integrations/eevee/verify_package.py input
+
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - uses: actions/checkout@v5
+        with:
+          repository: theos/theos
+          ref: dd5c14bb9d91311e221d51b5bfb8c9e5948156db
+          path: deps/theos
+          submodules: recursive
+          persist-credentials: false
+
+      - uses: actions/checkout@v5
+        with:
+          repository: w3ltyyy/EeveeSpotifyNext
+          ref: ${{ env.EEVEE_COMMIT }}
+          path: deps/eevee
+          persist-credentials: false
+
+      - name: Install build tools
+        run: |
+          brew install make dpkg ldid
+          python3 -m pip install --break-system-packages 'git+https://github.com/asdfzxcvbn/pyzule-rw.git@740d3716dcd98c20c000f12cdb88f1f0b2a533a4'
+          sdk="$(xcrun --sdk iphoneos --show-sdk-path)"
+          mkdir -p "$THEOS/sdks"
+          ln -s "$sdk" "$THEOS/sdks/$(basename "$sdk")"
+
+      - name: Apply coexistence patch and test it
+        run: |
+          python3 integrations/eevee/test_prepare_eevee.py deps/eevee
+          python3 integrations/eevee/prepare_eevee.py deps/eevee
+
+      - name: Build SwiftProtobuf and Eevee from source
+        working-directory: deps/eevee
+        run: |
+          bash setup-local-build.sh
+          env -u MAKELEVEL gmake clean package FINALPACKAGE=1
+
+      - name: Inject Eevee while preserving extensions
+        run: |
+          mkdir -p out
+          shopt -s nullglob
+          inputs=(input/*.ipa)
+          packages=(deps/eevee/packages/*_iphoneos-arm.deb)
+          test "${#inputs[@]}" -eq 1
+          test "${#packages[@]}" -eq 1
+          cyan -i "${inputs[0]}" -o out/spoti.pw-0.22.0-eevee.ipa -f "${packages[0]}" -s --overwrite
+          python3 integrations/eevee/verify_package.py out --combined --base "${inputs[0]}"
+          cp deps/eevee/LICENSE out/EeveeSpotifyNext-LICENSE.txt
+          cp "${packages[0]}" out/
+          tar --exclude=.git --exclude=.theos --exclude=packages -czf out/EeveeSpotifyNext-source.tar.gz -C deps/eevee .
+          shasum -a 256 out/*.ipa > out/SHA256SUMS.txt
+          printf 'Spotify: 9.1.78\nspoti.pw: 0.22.0\nEevee source: %s\nBase run: %s\nBuild run: %s\nEevee lyrics disabled to preserve spoti.pw lyrics.\nPlayback functionality requires an iPhone test.\n' "$EEVEE_COMMIT" "$BASE_RUN_ID" "$GITHUB_RUN_ID" > out/BUILD-INFO.txt
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: spoti-eevee
+          path: out/*
+          if-no-files-found: error
+          retention-days: 30
