@@ -6,19 +6,26 @@ import ObjectiveC
 
 struct SpotiVisualEffectsHookGroup: HookGroup { }
 
-private var spotiVisualEffectsActivationScheduled = false
+// Main-queue state only. Nothing in this file runs automatically at launch.
+private var spotiVisualEffectsActivated = false
 
 func activateSpotiVisualEffects() {
-    guard !spotiVisualEffectsActivationScheduled else { return }
-    spotiVisualEffectsActivationScheduled = true
-    // dyld has registered Objective-C classes before constructors run; waiting
-    // for the main queue also lets both injected tweaks finish initialization.
+    // This is called only when the user applies a style in Visual styles.
+    // A saved preference never enables hooks in a later process automatically.
     DispatchQueue.main.async {
-        guard #available(iOS 26.0, *), let fieldClass = NSClassFromString("SGRArtworkField") else { return }
+        guard #available(iOS 26.0, *), UIApplication.shared.applicationState == .active,
+              spotiVisualEffectsRequested() else { return }
+        if spotiVisualEffectsActivated {
+            requestSpotiVisualEffectsRefresh()
+            return
+        }
+        guard let fieldClass = NSClassFromString("SGRArtworkField") else { return }
         let selectors = ["layoutSubviews", "didMoveToWindow", "setMotionHeld:", "motionHeld", "showsBackdrop", "fieldColor"]
         guard selectors.allSatisfy({ class_getInstanceMethod(fieldClass, NSSelectorFromString($0)) != nil }) else { return }
         installSpotiVisualEffectsObservers()
         SpotiVisualEffectsHookGroup().activate()
+        spotiVisualEffectsActivated = true
+        requestSpotiVisualEffectsRefresh()
     }
 }
 

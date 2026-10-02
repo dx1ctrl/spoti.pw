@@ -11,21 +11,36 @@ workflow preserves the existing app extensions and App Intents metadata and
 checks that they remain present. The output includes the patched Eevee source,
 license, package and SHA-256 checksum.
 
-## Visuals 1
+## Visuals 2 recovery
+
+A phone reported an immediate launch freeze with Visuals 1. This recovery build
+leaves Eevee's original startup source unchanged: no visual registry, notification
+subscriptions or visual hooks are initialized at launch, regardless of the saved
+style. An explicit style tap or **Apply selected style** starts them for the
+current session. Close/reopen starts without the extra effects again.
+
+It also removes the app-wide defaults observer and makes every visual notification
+callback enqueue asynchronously on main from a queue-less subscription. This
+avoids making background notification posters wait for the main thread, where
+reading preferences or touching UIKit could otherwise participate in a deadlock.
+That risk is supported by the source; the reported phone freeze has no captured
+hang stack and its exact cause has not been established. A regression test blocks
+main while a background thread posts and verifies that posting can still finish.
 
 **EeveeSpotify → Visual styles** adds three optional treatments to the expanded
 Redesigned UI player: Artwork aura, Purple neon, and Minimal glass. Styles have
 an intensity control and motion switch, and can be turned off independently.
 They require iOS 26 or later and Mod Settings → Appearance → Redesigned UI.
-After enabling Redesigned UI, restart the app once; changing the new style
-controls then applies when returning to the player.
+After enabling Redesigned UI, restart the app once. Then tap a style or
+**Apply selected style** and return to the player. Repeat Apply after each launch
+in this recovery build. The last style, intensity and motion preferences are saved.
 
 The original companion uses its own decorative layers on the mod's existing
 player background. It does not change playback, artwork, controls, app accents,
 the mini-player or the native Spotify layout. Hook activation checks the target
 class and selectors before installing. Motion respects Reduce Motion, Low Power
 Mode, backgrounding and the player's existing pause/transition state.
-The styles start off to preserve the current appearance until one is selected.
+The styles start inactive every session, even when a style preference is saved.
 
 ## Included reliability fixes (2026.10.01)
 
@@ -63,7 +78,7 @@ account and bundle-ID settings as before, without deleting the original app.
 
 The workflow tests source preparation, network policy, concurrent buffers and
 bookmark helpers, compiles the complete iOS library, then validates the packaged
-IPA and retained extensions. Its output is `spoti.pw-0.22.0-visuals.ipa`.
+IPA and retained extensions. Its output is `spoti.pw-0.22.0-visuals-recovery.ipa`.
 
 Upstream reports 9.1.x support and tested 9.1.58. A successful build does not prove
 playback works on 9.1.78: verify selection of individual tracks, repeated skips,
@@ -89,6 +104,12 @@ paused playback, Reduce Motion, Low Power Mode, rotation, background/foreground,
 track changes, and opening/closing the player. Confirm taps, scrolling and lyrics
 still work, and Off restores the previous background. Compilation and package
 checks cannot substitute for this on-device appearance test.
+
+First verify a cold launch without entering Visual styles. Check normal playback,
+then explicitly apply a style. Force-close and launch again to verify that saved
+preferences do not initialize the visual runtime during startup. If the app still
+freezes before Apply, use the earlier IPA and collect an iOS hang/analytics report;
+that would point beyond this new runtime path.
 
 To return to the previous behavior, reinstall the original spoti.pw IPA with the
 same signing settings. No combined IPA is published as a public release here.

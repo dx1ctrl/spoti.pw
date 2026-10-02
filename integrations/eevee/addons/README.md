@@ -52,7 +52,9 @@ deletion. A successful Foundation test does not verify UIKit or SwiftUI behavior
 neon, and Minimal glass. These are previews of the treatments rather than live
 screenshots. The actual artwork treatment uses the expanded player's field color.
 Intensity and optional motion are applied through local preferences and a
-notification. Off removes the companion's decoration.
+notification. Off removes the companion's decoration. In Visuals 2 recovery,
+an explicit style tap or Apply selected style starts the runtime for this session;
+saved preferences never start it at launch.
 
 `SpotiVisualEffects.x.swift` installs a guarded hook on the original mod's
 `SGRArtworkField`. Only its redesigned player instance has `showsBackdrop` set.
@@ -61,6 +63,11 @@ it neither copies nor replaces the mod's field implementation. No audio, session
 network or Spotify private-view hook is added by this feature. It is restricted
 to Redesigned UI on iOS 26+ and does not restyle the rest of Spotify.
 
-The new preference values use the `spotifyglass.` namespace and primitive types
-so the mod's existing settings export/import can carry them. Device testing is
+The new preference values use the `spotifyglass.redesign.visuals.` namespace and
+primitive types so the mod's existing settings export/import can carry them.
+After restoring preferences, open Visual styles and explicitly Apply. There is
+no global defaults observer. `SpotiVisualEvents.swift` registers queue-less
+observers and enqueues handlers asynchronously on main; notification posters never
+wait for visual UI work. Its Foundation test verifies this with main blocked,
+as well as ordering and absence of inline callback reentrancy. Device testing is
 required to assess appearance, layout, motion and navigation on a real phone.

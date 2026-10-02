@@ -49,6 +49,17 @@ func installSpotiVisualEffectsObservers() {
     _ = SpotiVisualEffectsRegistry.shared
 }
 
+// Read only by the explicit settings action after it reaches the main queue.
+func spotiVisualEffectsRequested() -> Bool {
+    let configuration = SpotiVisualEffectsConfiguration.read()
+    return configuration.style != "off" && configuration.intensity > 0
+}
+
+func requestSpotiVisualEffectsRefresh() {
+    guard Thread.isMainThread else { return }
+    SpotiVisualEffectsRegistry.shared.reload()
+}
+
 private final class SpotiVisualEffectsRegistry {
     static let shared = SpotiVisualEffectsRegistry()
     private let fields = NSHashTable<UIView>.weakObjects()
@@ -59,17 +70,8 @@ private final class SpotiVisualEffectsRegistry {
 
     private init() {
         observe("spotifyglass.redesign.visuals.changed") { [weak self] _ in
-            guard let self = self else { return }
-            self.configuration = .read()
-            self.refreshAll()
+            self?.reload()
         }
-        observers.append(NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
-            guard let self = self else { return }
-            let updated = SpotiVisualEffectsConfiguration.read()
-            guard updated != self.configuration else { return }
-            self.configuration = updated
-            self.refreshAll()
-        })
         observe("spotifyglass.redesign.fieldColorDidChange") { [weak self] note in
             guard let self = self, let field = note.object as? UIView,
                   self.fields.contains(field) else { return }
@@ -83,25 +85,33 @@ private final class SpotiVisualEffectsRegistry {
             self?.transitioning = false
             self?.refreshAll()
         }
-        observers.append(NotificationCenter.default.addObserver(forName: UIApplication.willResignActiveNotification, object: nil, queue: .main) { [weak self] _ in
-            // UIKit sends willResign before applicationState necessarily changes.
+        observe(UIApplication.willResignActiveNotification.rawValue) { [weak self] _ in
             self?.appActive = false
             self?.refreshAll()
-        })
-        observers.append(NotificationCenter.default.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+        }
+        observe(UIApplication.didBecomeActiveNotification.rawValue) { [weak self] _ in
             self?.appActive = true
-            self?.refreshAll()
-        })
+            self?.reload()
+        }
         for name in [Notification.Name.NSProcessInfoPowerStateDidChange,
                      UIAccessibility.reduceMotionStatusDidChangeNotification] {
-            observers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+            observe(name.rawValue) { [weak self] _ in
                 self?.refreshAll()
-            })
+            }
         }
     }
 
     private func observe(_ name: String, handler: @escaping (Notification) -> Void) {
-        observers.append(NotificationCenter.default.addObserver(forName: Notification.Name(name), object: nil, queue: .main, using: handler))
+        // NotificationCenter may post while a background thread holds a lock.
+        // Never synchronously wait for the main queue or read UIKit/defaults on
+        // the posting thread. Even main-thread posts are deferred to prevent
+        // reentrancy into singleton initialization or a layout callback.
+        observers.append(addAsyncMainObserver(name: Notification.Name(name), handler: handler))
+    }
+
+    func reload() {
+        configuration = .read()
+        refreshAll()
     }
 
     func register(_ field: UIView) {

@@ -38,7 +38,11 @@ class IntegrationPreparationTests(unittest.TestCase):
         self.assertIn("with: SpotiToolsView()", settings)
         self.assertIn("with: SpotiVisualsView()", settings)
         tweak = (self.root / "Sources/EeveeSpotify/Tweak.x.swift").read_text(encoding="utf-8")
-        self.assertEqual(tweak.count("activateSpotiVisualEffects()"), 1)
+        original_tweak = (FIXTURES / "Sources/EeveeSpotify/Tweak.x.swift").read_text(encoding="utf-8")
+        # A saved visual preference must not install new observers or hooks
+        # during launch. Recovery keeps the original startup path byte-for-byte.
+        self.assertEqual(tweak, original_tweak)
+        self.assertNotIn("activateSpotiVisualEffects()", tweak)
         self.assertTrue((self.root / "Sources/EeveeSpotify/SpotiTools/SpotiVisualEffects.x.swift").is_file())
         self.assertNotIn("with: EeveeLyricsSettingsView()", settings)
         after = snapshot(self.root)

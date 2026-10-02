@@ -2,7 +2,6 @@
 // Original visual style controls for the optional Eevee integration.
 import SwiftUI
 import UIKit
-import Combine
 
 private enum SpotiVisualChoice: String, CaseIterable, Identifiable {
     case off, artwork, neon, glass
@@ -75,15 +74,21 @@ struct SpotiVisualsView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Label("Make the player yours", systemImage: "sparkles")
                         .font(.headline)
-                    Text("Three looks for the full-screen player. Choose one below, then open a song.")
+                    Text("Tap a style to apply it for this session. Visual effects start off each time Spotify opens.")
                         .font(.subheadline).foregroundColor(.secondary)
                 }
                 .padding(.vertical, 4)
+                if choice != .off {
+                    Button { select(choice) } label: {
+                        Label("Apply selected style", systemImage: "sparkles")
+                    }
+                    .tint(choice.accent)
+                }
             } footer: {
                 Text("Requires iOS 26 and Redesigned UI. To enable it, hold Home → Mod Settings → Appearance → Redesigned UI, then restart Spotify once. These visual style controls apply without another restart.")
             }
 
-            Section(header: Text("Choose your style")) {
+            Section(header: Text("Saved style")) {
                 Button { select(.off) } label: {
                     HStack(spacing: 12) {
                         Image(systemName: "circle.slash").foregroundColor(.secondary)
@@ -151,8 +156,6 @@ struct SpotiVisualsView: View {
         .eeveeSettingsListStyle()
         .preferredColorScheme(.dark)
         .onAppear(perform: reload)
-        .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)
-            .receive(on: DispatchQueue.main)) { _ in reload() }
     }
 
     private var intensityBinding: Binding<Double> {
@@ -172,6 +175,9 @@ struct SpotiVisualsView: View {
     private func select(_ style: SpotiVisualChoice) {
         choice = style
         SpotiVisualPreferences.set(style.rawValue, forKey: SpotiVisualPreferences.styleKey)
+        if style != .off {
+            activateSpotiVisualEffects()
+        }
     }
 
     private func reload() {

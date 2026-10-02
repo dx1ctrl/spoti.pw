@@ -79,6 +79,8 @@ jobs:
           python3 integrations/eevee/test_reliability.py deps/eevee
           swiftc integrations/eevee/addons/SpotiToolsModels.swift integrations/eevee/addons/tests/SpotiToolsTests.swift -o "$RUNNER_TEMP/spoti-tools-tests"
           "$RUNNER_TEMP/spoti-tools-tests"
+          swiftc integrations/eevee/addons/SpotiVisualEvents.swift integrations/eevee/addons/tests/SpotiVisualEventsTests.swift -o "$RUNNER_TEMP/spoti-visual-events-tests"
+          "$RUNNER_TEMP/spoti-visual-events-tests"
           python3 -m unittest discover -s integrations/eevee -p 'test_inspect_ipa.py'
           python3 -m unittest discover -s integrations/eevee -p 'test_verify_package.py'
           python3 integrations/eevee/prepare_eevee.py deps/eevee
@@ -97,17 +99,17 @@ jobs:
           packages=(deps/eevee/packages/*_iphoneos-arm.deb)
           test "${#inputs[@]}" -eq 1
           test "${#packages[@]}" -eq 1
-          cyan -i "${inputs[0]}" -o out/spoti.pw-0.22.0-visuals.ipa -f "${packages[0]}" -s --overwrite
+          cyan -i "${inputs[0]}" -o out/spoti.pw-0.22.0-visuals-recovery.ipa -f "${packages[0]}" -s --overwrite
           python3 integrations/eevee/verify_package.py out --combined --base "${inputs[0]}"
           cp deps/eevee/LICENSE out/EeveeSpotifyNext-LICENSE.txt
           cp "${packages[0]}" out/
           tar --exclude=.git --exclude=.theos --exclude=packages -czf out/EeveeSpotifyNext-source.tar.gz -C deps/eevee .
           shasum -a 256 out/*.ipa > out/SHA256SUMS.txt
-          printf 'Spotify: 9.1.78\nspoti.pw: 0.22.0\nIntegration: Visuals 1\nEevee source: %s\nBase run: %s\nBuild run: %s\nBuild commit: %s\nIncludes network reliability fixes, Song tools and three switchable player visual styles.\nVisual styles require Redesigned UI on iOS 26 or later.\nEevee lyrics disabled to preserve spoti.pw lyrics.\nPlayback and on-device appearance require an iPhone test.\n' "$EEVEE_COMMIT" "$BASE_RUN_ID" "$GITHUB_RUN_ID" "$GITHUB_SHA" > out/BUILD-INFO.txt
+          printf 'Spotify: 9.1.78\nspoti.pw: 0.22.0\nIntegration: Visuals 2 recovery\nEevee source: %s\nBase run: %s\nBuild run: %s\nBuild commit: %s\nIncludes network reliability fixes, Song tools and three switchable player visual styles.\nVisual runtime is not initialized at launch; use Apply selected style each session.\nNotification callbacks enqueue asynchronously without waiting for the main thread.\nVisual styles require Redesigned UI on iOS 26 or later.\nEevee lyrics disabled to preserve spoti.pw lyrics.\nStartup recovery, playback and appearance require an iPhone test.\n' "$EEVEE_COMMIT" "$BASE_RUN_ID" "$GITHUB_RUN_ID" "$GITHUB_SHA" > out/BUILD-INFO.txt
 
       - uses: actions/upload-artifact@v5
         with:
-          name: spoti-visuals
+          name: spoti-visuals-recovery
           path: out/*
           if-no-files-found: error
           retention-days: 30
