@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Disable Eevee lyric replacement when packaging it with spoti.pw.
+"""Prepare the reviewed Eevee integration, reliability fixes and Song tools.
 
 SPDX-License-Identifier: GPL-3.0-only
 Compatibility adaptation for EeveeSpotifyNext, derived from EeveeSpotify by
@@ -9,8 +9,8 @@ Pinned source: 8a9e4c3c1ca9a8991023d8b16be159aa73420017
 The upstream GPL-3.0 license and attribution must accompany this adaptation.
 
 This does not establish compatibility with any additional Spotify version.
-Only the two lyric-integration changes below are permitted. Premium and session
-protection code are preserved. Both files are validated before either is written.
+The source stays pinned. All modified inputs are validated before any file is
+written. The original two lyric changes remain independently regression-tested.
 """
 
 from __future__ import annotations
@@ -92,7 +92,7 @@ def verify_checkout(root: Path) -> None:
         raise PreparationError(f"expected Git HEAD {PINNED_COMMIT}; found {lines[1]}")
 
 
-def apply_patches(root: Path) -> tuple[Path, ...]:
+def plan_lyric_patches(root: Path) -> list[tuple[Path, bytes]]:
     """Validate all source bytes and exact matches, then make only these changes.
 
     LF and CRLF checkouts share a canonical hash; original line endings are kept.
@@ -124,9 +124,42 @@ def apply_patches(root: Path) -> tuple[Path, ...]:
             replacement = replacement.replace("\n", "\r\n")
         planned.append((path, replacement.encode("utf-8")))
 
+    return planned
+
+
+def write_plan(planned: list[tuple[Path, bytes]]) -> tuple[Path, ...]:
     for path, replacement in planned:
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(replacement)
     return tuple(path for path, _ in planned)
+
+
+def apply_patches(root: Path) -> tuple[Path, ...]:
+    """Legacy lyric-only helper, retained for isolated regression tests."""
+    return write_plan(plan_lyric_patches(root))
+
+
+def prepare_integration(root: Path) -> tuple[Path, ...]:
+    """Build one complete validated plan; no partially prepared source on failure."""
+    import addon_integration
+    import reliability
+    import session_reliability
+
+    planned = dict(plan_lyric_patches(root))
+    for path, content in reliability.plan_patches(root):
+        if path in planned and path != root / LOADER_PATH:
+            raise PreparationError(f"Conflicting preparation for {path.name}")
+        if path == root / LOADER_PATH:
+            # Reliability's loader includes the same coexistence guard.
+            normalized = content.decode("utf-8").replace("\r\n", "\n")
+            if PATCHES[1].after not in normalized:
+                raise PreparationError("Reliability loader lost the spoti.pw lyrics guard")
+        planned[path] = content
+    for path, content in [*session_reliability.plan_patches(root), *addon_integration.plan_patches(root)]:
+        if path in planned:
+            raise PreparationError(f"Conflicting addon preparation for {path.name}")
+        planned[path] = content
+    return write_plan(list(planned.items()))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -135,13 +168,13 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         verify_checkout(args.source)
-        changed = apply_patches(args.source)
-    except (PreparationError, OSError) as exc:
+        changed = prepare_integration(args.source)
+    except (PreparationError, OSError, ValueError) as exc:
         print(f"Eevee preparation refused: {exc}", file=sys.stderr)
         return 1
     for path in changed:
         print(f"Patched {path.relative_to(args.source)}")
-    print("Eevee lyric replacement disabled; runtime compatibility still requires device testing.")
+    print("Prepared reliability fixes and Song tools; iPhone playback testing is still required.")
     return 0
 
 
