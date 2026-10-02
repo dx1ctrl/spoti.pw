@@ -1,8 +1,10 @@
-# Song tools companion
+# Original companion features
 
 These original GPL-3.0-or-later Swift sources add `SpotiToolsView()` to the optional
 Eevee settings page. Copy only `SpotiToolsModels.swift` and `SpotiToolsView.swift`
-into Eevee's source tree, and link MediaPlayer. Do not compile `tests/` into the
+into Eevee's source tree, and link MediaPlayer. The preparation script also copies
+the `SpotiVisual*.swift` sources for the separate Visual styles feature below.
+Do not compile `tests/` into the
 app. No spoti.pw implementation is changed or copied.
 
 The page reads the current process's public `MPNowPlayingInfoCenter` dictionary
@@ -43,3 +45,22 @@ swiftc integrations/eevee/addons/SpotiToolsModels.swift \
 These tests cover strict URL validation, query encoding, position formatting,
 bookmark serialization, bounded storage, corrupt-data handling, and explicit
 deletion. A successful Foundation test does not verify UIKit or SwiftUI behavior.
+
+## Visual styles
+
+`SpotiVisualsView()` provides three illustrated selections: Artwork aura, Purple
+neon, and Minimal glass. These are previews of the treatments rather than live
+screenshots. The actual artwork treatment uses the expanded player's field color.
+Intensity and optional motion are applied through local preferences and a
+notification. Off removes the companion's decoration.
+
+`SpotiVisualEffects.x.swift` installs a guarded hook on the original mod's
+`SGRArtworkField`. Only its redesigned player instance has `showsBackdrop` set.
+The companion draws its own noninteractive layers behind the cover and controls;
+it neither copies nor replaces the mod's field implementation. No audio, session,
+network or Spotify private-view hook is added by this feature. It is restricted
+to Redesigned UI on iOS 26+ and does not restyle the rest of Spotify.
+
+The new preference values use the `spotifyglass.` namespace and primitive types
+so the mod's existing settings export/import can carry them. Device testing is
+required to assess appearance, layout, motion and navigation on a real phone.

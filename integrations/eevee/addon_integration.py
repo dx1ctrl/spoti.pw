@@ -1,4 +1,4 @@
-"""Wire the independent Song tools page into the pinned Eevee settings view.
+"""Wire the independent Song tools and visual styles into pinned Eevee.
 
 SPDX-License-Identifier: GPL-3.0-only
 Eevee settings adaptation based on EeveeSpotifyNext (see bundled LICENSE).
@@ -9,9 +9,11 @@ import hashlib
 
 SETTINGS = Path("Sources/EeveeSpotify/Settings/Views/EeveeSettingsView.swift")
 MAKEFILE = Path("Makefile")
+TWEAK = Path("Sources/EeveeSpotify/Tweak.x.swift")
 HASHES = {
     SETTINGS: "313d1c87f3091fc065283f16643cc29099dfda1ddbb8ffdefdacb61014b0da72",
     MAKEFILE: "2868eeec16e51670bb38f1481168ba77eb770bb2c5284085a89681dff067c2b6",
+    TWEAK: "bd847a619dfda0c603ec70ce7958cf3e7214bb1c546331a537a7636e99578a84",
 }
 ADDONS = Path(__file__).with_name("addons")
 
@@ -46,7 +48,16 @@ def plan_patches(root):
                     imageSystemName: "music.note.list"
                 )
             }
-            Text("spoti.pw integration · 2026.10.01")
+            Button {
+                pushSettingsController(with: SpotiVisualsView(), title: "Visual styles")
+            } label: {
+                NavigationSectionView(
+                    color: Color(hex: "#BF5AF2"),
+                    title: "Visual styles",
+                    imageSystemName: "sparkles"
+                )
+            }
+            Text("spoti.pw integration · Visuals 1")
                 .font(.caption)
                 .foregroundColor(.secondary)''')
     # The integration disables Eevee lyrics in code. Show the real control location
@@ -73,9 +84,14 @@ def plan_patches(root):
     makefile = replace_once(makefile, "TARGET := iphone:clang:latest:14.0", "TARGET := iphone:clang:latest:16.1")
     makefile = replace_once(makefile, "EeveeSpotify_EXTRA_FRAMEWORKS = SwiftProtobuf", "EeveeSpotify_EXTRA_FRAMEWORKS = SwiftProtobuf\nEeveeSpotify_FRAMEWORKS += MediaPlayer")
     planned.append((root / MAKEFILE, makefile.replace("\n", "\r\n").encode() if crlf else makefile.encode()))
-    sources = sorted(ADDONS.glob("SpotiTools*.swift"))
-    if not sources:
-        raise ValueError("Song tools source files are missing")
+    tweak, crlf = validated_text(root, TWEAK)
+    tweak = replace_once(tweak, "    init() {\n        // Activate session logout protection first", "    init() {\n        activateSpotiVisualEffects()\n\n        // Activate session logout protection first")
+    planned.append((root / TWEAK, tweak.replace("\n", "\r\n").encode() if crlf else tweak.encode()))
+    sources = sorted([*ADDONS.glob("SpotiTools*.swift"), *ADDONS.glob("SpotiVisual*.swift")])
+    required = {"SpotiToolsModels.swift", "SpotiToolsView.swift", "SpotiVisualsView.swift",
+                "SpotiVisualEffects.swift", "SpotiVisualEffects.x.swift"}
+    if not required.issubset({source.name for source in sources}):
+        raise ValueError("Required companion source files are missing")
     for source in sources:
         destination = root / "Sources/EeveeSpotify/SpotiTools" / source.name
         if destination.exists():

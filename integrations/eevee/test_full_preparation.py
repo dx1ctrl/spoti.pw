@@ -36,6 +36,10 @@ class IntegrationPreparationTests(unittest.TestCase):
         self.assertTrue((self.root / "Sources/EeveeSpotify/SpotiTools/SpotiToolsView.swift").is_file())
         settings = (self.root / "Sources/EeveeSpotify/Settings/Views/EeveeSettingsView.swift").read_text(encoding="utf-8")
         self.assertIn("with: SpotiToolsView()", settings)
+        self.assertIn("with: SpotiVisualsView()", settings)
+        tweak = (self.root / "Sources/EeveeSpotify/Tweak.x.swift").read_text(encoding="utf-8")
+        self.assertEqual(tweak.count("activateSpotiVisualEffects()"), 1)
+        self.assertTrue((self.root / "Sources/EeveeSpotify/SpotiTools/SpotiVisualEffects.x.swift").is_file())
         self.assertNotIn("with: EeveeLyricsSettingsView()", settings)
         after = snapshot(self.root)
         with self.assertRaises((ValueError, prepare_eevee.PreparationError)):

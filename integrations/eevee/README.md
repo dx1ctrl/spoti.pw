@@ -1,4 +1,4 @@
-# Optional Eevee package with reliability fixes and Song tools
+# Optional Eevee package with reliability fixes, Song tools and visual styles
 
 This separate workflow adds a source-built EeveeSpotifyNext library to an existing
 spoti.pw 0.22.0 artifact. It does not modify spoti.pw's implementation. The source
@@ -11,7 +11,23 @@ workflow preserves the existing app extensions and App Intents metadata and
 checks that they remain present. The output includes the patched Eevee source,
 license, package and SHA-256 checksum.
 
-## Integration 2026.10.01
+## Visuals 1
+
+**EeveeSpotify → Visual styles** adds three optional treatments to the expanded
+Redesigned UI player: Artwork aura, Purple neon, and Minimal glass. Styles have
+an intensity control and motion switch, and can be turned off independently.
+They require iOS 26 or later and Mod Settings → Appearance → Redesigned UI.
+After enabling Redesigned UI, restart the app once; changing the new style
+controls then applies when returning to the player.
+
+The original companion uses its own decorative layers on the mod's existing
+player background. It does not change playback, artwork, controls, app accents,
+the mini-player or the native Spotify layout. Hook activation checks the target
+class and selectors before installing. Motion respects Reduce Motion, Low Power
+Mode, backgrounding and the player's existing pause/transition state.
+The styles start off to preserve the current appearance until one is selected.
+
+## Included reliability fixes (2026.10.01)
 
 The package addresses demonstrated client-side bugs in the pinned Eevee code:
 
@@ -47,7 +63,7 @@ account and bundle-ID settings as before, without deleting the original app.
 
 The workflow tests source preparation, network policy, concurrent buffers and
 bookmark helpers, compiles the complete iOS library, then validates the packaged
-IPA and retained extensions. Its output is `spoti.pw-0.22.0-eevee-plus.ipa`.
+IPA and retained extensions. Its output is `spoti.pw-0.22.0-visuals.ipa`.
 
 Upstream reports 9.1.x support and tested 9.1.58. A successful build does not prove
 playback works on 9.1.78: verify selection of individual tracks, repeated skips,
@@ -66,6 +82,13 @@ again after a longer listening session. Test Spotify Connect separately because
 the remote device streams the audio itself. Confirm Song tools opens, can save a
 bookmark, shares available artwork, and handles missing metadata gracefully.
 No automatic or repeat-until-success skipping logic is added.
+
+For the visual styles, enable Redesigned UI and restart, then select each style
+in turn and open the expanded player. Check the intensity limits, motion toggle,
+paused playback, Reduce Motion, Low Power Mode, rotation, background/foreground,
+track changes, and opening/closing the player. Confirm taps, scrolling and lyrics
+still work, and Off restores the previous background. Compilation and package
+checks cannot substitute for this on-device appearance test.
 
 To return to the previous behavior, reinstall the original spoti.pw IPA with the
 same signing settings. No combined IPA is published as a public release here.
