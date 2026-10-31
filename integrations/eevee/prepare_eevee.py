@@ -1,90 +1,39 @@
 #!/usr/bin/env python3
-"""Prepare the reviewed Eevee integration, reliability fixes and Song tools.
-
-SPDX-License-Identifier: GPL-3.0-only
-Compatibility adaptation for EeveeSpotifyNext, derived from EeveeSpotify by
-Eevee/whoeevee, the Meeep1/Skye Revived fork, and w3ltyyy's Next fork.
-Upstream: https://github.com/w3ltyyy/EeveeSpotifyNext
-Pinned source: 8a9e4c3c1ca9a8991023d8b16be159aa73420017
-The upstream GPL-3.0 license and attribution must accompany this adaptation.
-
-This does not establish compatibility with any additional Spotify version.
-The source stays pinned. All modified inputs are validated before any file is
-written. The original two lyric changes remain independently regression-tested.
-"""
-
+"""Prepare pinned EeveeSpotifyReincarnated sources with spoti.pw additions."""
 from __future__ import annotations
 
 import argparse
 import hashlib
 import subprocess
 import sys
-from dataclasses import dataclass
 from pathlib import Path
 
-
-PINNED_COMMIT = "8a9e4c3c1ca9a8991023d8b16be159aa73420017"
-PREFERENCES_PATH = Path(
-    "Sources/EeveeSpotify/Lyrics/Models/Settings/LyricsSource+UserDefaults.swift"
-)
-LOADER_PATH = Path("Sources/EeveeSpotify/DataLoaderServiceHooks.x.swift")
-
-
-class PreparationError(Exception):
-    """The input is not the reviewed, unmodified upstream source."""
-
-
-@dataclass(frozen=True)
-class SourcePatch:
-    path: Path
-    sha256: str
-    before: str
-    after: str
-
-
-PATCHES = (
-    SourcePatch(
-        PREFERENCES_PATH,
-        "7047372a18eed3c96e2f6d0c66575fa5d6001622d0d2d8e589086e1f4fe9615e",
-        """        get {
+PINNED_COMMIT = "ca363e63efd4730811a241ec48a5c0e4ef838112"
+LYRICS = Path("Sources/EeveeSpotify/Lyrics/Models/Settings/LyricsSource+UserDefaults.swift")
+LYRICS_SHA256 = "7047372a18eed3c96e2f6d0c66575fa5d6001622d0d2d8e589086e1f4fe9615e"
+LYRICS_ORIGINAL = """        get {
             if let rawValue = container.object(forKey: lyricsSourceKey) as? Int {
                 return LyricsSource(rawValue: rawValue) ?? .defaultSource
             }
 
             return LyricsSource.defaultSource
-        }""",
-        """        get {
-            // spoti.pw supplies lyrics; never activate Eevee's replacement hooks.
+        }"""
+LYRICS_REPLACEMENT = """        get {
+            // spoti.pw supplies lyrics; keep Eevee's replacement hooks inactive.
             return .notReplaced
-        }""",
-    ),
-    SourcePatch(
-        LOADER_PATH,
-        "cde96f8e90eab8c0e5e8d1e93b3d42174423c800a064960c32c92df3c3df8c4b",
-        """        guard
-            let url = task.currentRequest?.url,
-            url.isLyrics,
-            response.statusCode != 200""",
-        """        guard
-            BaseLyricsGroup.isActive,
-            let url = task.currentRequest?.url,
-            url.isLyrics,
-            response.statusCode != 200""",
-    ),
-)
+        }"""
+
+
+class PreparationError(Exception):
+    pass
 
 
 def verify_checkout(root: Path) -> None:
-    """Require the reviewed commit, rather than a branch that can move."""
     try:
-        result = subprocess.run(
-            ["git", "-C", str(root), "rev-parse", "--show-toplevel", "HEAD"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
+        result = subprocess.run(["git", "-C", str(root), "rev-parse", "--show-toplevel", "HEAD"],
+                                capture_output=True, text=True, check=True)
     except (OSError, subprocess.CalledProcessError) as exc:
-        raise PreparationError("source must be a Git checkout of the pinned commit") from exc
+        raise PreparationError("source must be a Git checkout of the pinned Reincarnated commit") from exc
     lines = result.stdout.splitlines()
     if len(lines) != 2 or Path(lines[0]).resolve() != root.resolve():
         raise PreparationError("source must point to the checkout root")
@@ -92,79 +41,43 @@ def verify_checkout(root: Path) -> None:
         raise PreparationError(f"expected Git HEAD {PINNED_COMMIT}; found {lines[1]}")
 
 
-def plan_lyric_patches(root: Path) -> list[tuple[Path, bytes]]:
-    """Validate all source bytes and exact matches, then make only these changes.
-
-    LF and CRLF checkouts share a canonical hash; original line endings are kept.
-    Already-patched inputs are rejected, as are edits outside the matched blocks.
-    """
-    planned: list[tuple[Path, bytes]] = []
-    for patch in PATCHES:
-        path = root / patch.path
-        try:
-            raw = path.read_bytes()
-            decoded = raw.decode("utf-8")
-        except (OSError, UnicodeError) as exc:
-            raise PreparationError(f"cannot read UTF-8 source: {patch.path}") from exc
-
-        text = decoded.replace("\r\n", "\n")
-        if "\r" in text:
-            raise PreparationError(f"unexpected line endings in {patch.path}")
-        count = text.count(patch.before)
-        if count != 1:
-            raise PreparationError(f"expected exactly one patch target in {patch.path}; found {count}")
-        digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
-        if digest != patch.sha256:
-            raise PreparationError(f"upstream SHA-256 mismatch in {patch.path}: {digest}")
-
-        replacement = text.replace(patch.before, patch.after, 1)
-        if b"\r\n" in raw:
-            if b"\n" in raw.replace(b"\r\n", b""):
-                raise PreparationError(f"mixed line endings in {patch.path}")
-            replacement = replacement.replace("\n", "\r\n")
-        planned.append((path, replacement.encode("utf-8")))
-
-    return planned
+def plan_lyrics(root: Path) -> list[tuple[Path, bytes]]:
+    path = root / LYRICS
+    raw = path.read_bytes()
+    text = raw.decode("utf-8").replace("\r\n", "\n")
+    if "\r" in text or hashlib.sha256(text.encode()).hexdigest() != LYRICS_SHA256:
+        raise PreparationError("Unreviewed Reincarnated lyrics settings source")
+    if text.count(LYRICS_ORIGINAL) != 1:
+        raise PreparationError("Reincarnated lyrics source target is missing or duplicated")
+    updated = text.replace(LYRICS_ORIGINAL, LYRICS_REPLACEMENT, 1)
+    if b"\r\n" in raw:
+        if b"\n" in raw.replace(b"\r\n", b""):
+            raise PreparationError("Mixed line endings in lyrics settings source")
+        updated = updated.replace("\n", "\r\n")
+    return [(path, updated.encode())]
 
 
 def write_plan(planned: list[tuple[Path, bytes]]) -> tuple[Path, ...]:
-    for path, replacement in planned:
+    for path, content in planned:
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(replacement)
+        path.write_bytes(content)
     return tuple(path for path, _ in planned)
 
 
-def apply_patches(root: Path) -> tuple[Path, ...]:
-    """Legacy lyric-only helper, retained for isolated regression tests."""
-    return write_plan(plan_lyric_patches(root))
-
-
 def prepare_integration(root: Path) -> tuple[Path, ...]:
-    """Build one complete validated plan; no partially prepared source on failure."""
     import addon_integration
-    import reliability
-    import session_reliability
 
-    planned = dict(plan_lyric_patches(root))
-    for path, content in reliability.plan_patches(root):
-        if path in planned and path != root / LOADER_PATH:
-            raise PreparationError(f"Conflicting preparation for {path.name}")
-        if path == root / LOADER_PATH:
-            # Reliability's loader includes the same coexistence guard.
-            normalized = content.decode("utf-8").replace("\r\n", "\n")
-            if PATCHES[1].after not in normalized:
-                raise PreparationError("Reliability loader lost the spoti.pw lyrics guard")
-        planned[path] = content
-    for path, content in [*session_reliability.plan_patches(root), *addon_integration.plan_patches(root)]:
+    planned = dict(plan_lyrics(root))
+    for path, content in addon_integration.plan_patches(root):
         if path in planned:
-            raise PreparationError(f"Conflicting addon preparation for {path.name}")
+            raise PreparationError(f"Conflicting integration patch for {path.name}")
         planned[path] = content
     return write_plan(list(planned.items()))
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("source", type=Path, help="EeveeSpotifyNext checkout at the pinned commit")
+    parser.add_argument("source", type=Path, help="pinned EeveeSpotifyReincarnated checkout")
     args = parser.parse_args(argv)
     try:
         verify_checkout(args.source)
@@ -174,7 +87,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     for path in changed:
         print(f"Patched {path.relative_to(args.source)}")
-    print("Prepared reliability fixes and Song tools; iPhone playback testing is still required.")
+    print("Prepared Reincarnated with spoti.pw Song tools and visual styles.")
     return 0
 
 

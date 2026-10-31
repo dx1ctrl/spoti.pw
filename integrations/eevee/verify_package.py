@@ -104,14 +104,14 @@ def inspect(path, combined=False):
         runtimes = []
         if combined:
             eevee_path = root + "Frameworks/EeveeSpotify.dylib"
-            for relative in ("Frameworks/EeveeSpotify.dylib", "Frameworks/SwiftProtobuf.framework/SwiftProtobuf",
+            for relative in ("Frameworks/EeveeSpotify.dylib", "Frameworks/EeveeSwiftProtobuf.framework/EeveeSwiftProtobuf",
                              "EeveeSpotify.bundle/resolveconfiguration.bnk",
                              "EeveeSpotify.bundle/en.lproj/Localizable.strings"):
                 if root + relative not in names:
                     raise ValueError(f"Missing injected dependency/resource: {relative}")
             require_load(main_slices, "/EeveeSpotify.dylib", "Main executable")
             eevee_slices = inspect_macho(package.read(eevee_path))
-            require_load(eevee_slices, "/SwiftProtobuf.framework/SwiftProtobuf", "Eevee executable")
+            require_load(eevee_slices, "/EeveeSwiftProtobuf.framework/EeveeSwiftProtobuf", "Eevee executable")
             runtimes = runtime_dependencies(package, root, eevee_path)
         return {"root": root, "version": info["CFBundleShortVersionString"],
                 "extensions": extensions, "metadata": metadata, "plists": plists,

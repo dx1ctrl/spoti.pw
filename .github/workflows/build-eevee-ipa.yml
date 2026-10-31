@@ -1,4 +1,4 @@
-name: Build spoti.pw with Eevee
+name: Build spoti.pw with EeveeSpotifyReincarnated
 
 on:
   workflow_dispatch:
@@ -25,11 +25,12 @@ concurrency:
 jobs:
   build:
     runs-on: macos-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     env:
       THEOS: ${{ github.workspace }}/deps/theos
-      EEVEE_COMMIT: 8a9e4c3c1ca9a8991023d8b16be159aa73420017
+      EEVEE_COMMIT: ca363e63efd4730811a241ec48a5c0e4ef838112
       BASE_RUN_ID: ${{ inputs.base_run_id || '36457343317' }}
+      SWIFTPROTOBUF_VERSION: '1.29.0'
     steps:
       - uses: actions/checkout@v5
         with:
@@ -42,7 +43,7 @@ jobs:
           github-token: ${{ github.token }}
           run-id: ${{ env.BASE_RUN_ID }}
 
-      - name: Validate input before building
+      - name: Validate original Spotify IPA
         run: python3 integrations/eevee/verify_package.py input
 
       - uses: maxim-lobanov/setup-xcode@v1
@@ -59,57 +60,70 @@ jobs:
 
       - uses: actions/checkout@v5
         with:
-          repository: w3ltyyy/EeveeSpotifyNext
+          repository: SideloadLabs/EeveeSpotifyReincarnated
           ref: ${{ env.EEVEE_COMMIT }}
           path: deps/eevee
+          submodules: recursive
           persist-credentials: false
 
       - name: Install build tools
         run: |
-          brew install make dpkg ldid
+          brew install make dpkg ldid wget
           python3 -m pip install --break-system-packages 'git+https://github.com/asdfzxcvbn/pyzule-rw.git@740d3716dcd98c20c000f12cdb88f1f0b2a533a4'
+          arch=$(uname -m); [ "$arch" = "x86_64" ] && suffix=macos-amd64 || suffix=macos-arm64
+          curl -fsSL "https://github.com/asdfzxcvbn/ipapatch/releases/download/v2.1.3/ipapatch.${suffix}" -o "$RUNNER_TEMP/ipapatch"
+          chmod +x "$RUNNER_TEMP/ipapatch"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
           sdk="$(xcrun --sdk iphoneos --show-sdk-path)"
           mkdir -p "$THEOS/sdks"
           ln -s "$sdk" "$THEOS/sdks/$(basename "$sdk")"
+          ipapatch --help >/dev/null
 
-      - name: Apply coexistence patch and test it
-        run: |
-          python3 integrations/eevee/test_prepare_eevee.py deps/eevee
-          python3 integrations/eevee/test_full_preparation.py deps/eevee
-          python3 integrations/eevee/test_reliability.py deps/eevee
-          swiftc integrations/eevee/addons/SpotiToolsModels.swift integrations/eevee/addons/tests/SpotiToolsTests.swift -o "$RUNNER_TEMP/spoti-tools-tests"
-          "$RUNNER_TEMP/spoti-tools-tests"
-          swiftc integrations/eevee/addons/SpotiVisualEvents.swift integrations/eevee/addons/tests/SpotiVisualEventsTests.swift -o "$RUNNER_TEMP/spoti-visual-events-tests"
-          "$RUNNER_TEMP/spoti-visual-events-tests"
-          python3 -m unittest discover -s integrations/eevee -p 'test_inspect_ipa.py'
-          python3 -m unittest discover -s integrations/eevee -p 'test_verify_package.py'
-          python3 integrations/eevee/prepare_eevee.py deps/eevee
+      - name: Prepare Reincarnated and add spoti.pw tools
+        run: python3 integrations/eevee/prepare_eevee.py deps/eevee
 
-      - name: Build SwiftProtobuf and Eevee from source
+      - name: Build renamed SwiftProtobuf framework
         working-directory: deps/eevee
-        run: |
-          bash setup-local-build.sh
-          env -u MAKELEVEL gmake clean package FINALPACKAGE=1
+        run: bash Tools/SwiftProtobufBuild/build-eeveeswiftprotobuf.sh
 
-      - name: Inject Eevee while preserving extensions
+      - name: Build Eevee package
+        working-directory: deps/eevee
+        env:
+          REPO_SLUG: dx1ctrl/spoti.pw
+          THEOS_PACKAGE_SCHEME: rootless
+        run: env -u MAKELEVEL gmake clean package FINALPACKAGE=1
+
+      - name: Build the sideload compatibility library
+        working-directory: deps/eevee
+        env:
+          THEOS_PACKAGE_SCHEME: rootless
+        run: bash Tools/build-zxpi.sh
+
+      - name: Inject Eevee into the original IPA
         run: |
-          mkdir -p out
+          mkdir -p out "$RUNNER_TEMP/eevee-package"
           shopt -s nullglob
           inputs=(input/*.ipa)
-          packages=(deps/eevee/packages/*_iphoneos-arm.deb)
+          packages=(deps/eevee/packages/com.eevee.spotify_*.deb)
           test "${#inputs[@]}" -eq 1
           test "${#packages[@]}" -eq 1
-          cyan -i "${inputs[0]}" -o out/spoti.pw-0.22.0-visuals-recovery.ipa -f "${packages[0]}" -s --overwrite
+          dpkg-deb -R "${packages[0]}" "$RUNNER_TEMP/eevee-package"
+          dylib=$(find "$RUNNER_TEMP/eevee-package" -name EeveeSpotify.dylib -type f -print -quit)
+          framework=$(find "$RUNNER_TEMP/eevee-package" -type d -name EeveeSwiftProtobuf.framework -print -quit)
+          bundle=$(find "$RUNNER_TEMP/eevee-package" -type d -name EeveeSpotify.bundle -print -quit)
+          test -n "$dylib" && test -n "$framework" && test -n "$bundle"
+          cyan -i "${inputs[0]}" -o out/spoti.pw-0.22.0-reincarnated.ipa -f "$dylib" "$framework" "$bundle" -s --overwrite
+          ipapatch --input out/spoti.pw-0.22.0-reincarnated.ipa --inplace --noconfirm --dylib deps/eevee/packages/zxPluginsInject.dylib
           python3 integrations/eevee/verify_package.py out --combined --base "${inputs[0]}"
-          cp deps/eevee/LICENSE out/EeveeSpotifyNext-LICENSE.txt
+          cp deps/eevee/LICENSE out/EeveeSpotifyReincarnated-LICENSE.txt
           cp "${packages[0]}" out/
-          tar --exclude=.git --exclude=.theos --exclude=packages -czf out/EeveeSpotifyNext-source.tar.gz -C deps/eevee .
+          tar --exclude=.git --exclude=.theos --exclude=packages --exclude=extra_dylibs -czf out/EeveeSpotifyReincarnated-source.tar.gz -C deps/eevee .
           shasum -a 256 out/*.ipa > out/SHA256SUMS.txt
-          printf 'Spotify: 9.1.78\nspoti.pw: 0.22.0\nIntegration: Visuals 2 recovery\nEevee source: %s\nBase run: %s\nBuild run: %s\nBuild commit: %s\nIncludes network reliability fixes, Song tools and three switchable player visual styles.\nVisual runtime is not initialized at launch; use Apply selected style each session.\nNotification callbacks enqueue asynchronously without waiting for the main thread.\nVisual styles require Redesigned UI on iOS 26 or later.\nEevee lyrics disabled to preserve spoti.pw lyrics.\nStartup recovery, playback and appearance require an iPhone test.\n' "$EEVEE_COMMIT" "$BASE_RUN_ID" "$GITHUB_RUN_ID" "$GITHUB_SHA" > out/BUILD-INFO.txt
+          printf 'Spotify: 9.1.78\nspoti.pw: 0.22.0\nEevee: SideloadLabs/EeveeSpotifyReincarnated\nEevee commit: %s\nBase run: %s\nBuild run: %s\nBuild commit: %s\nIncludes spoti.pw Song tools and Visuals 2 recovery.\nThe upstream source was last documented against Spotify 9.1.88; this package uses the verified 9.1.78 base and needs device playback verification.\nEevee lyrics replacement is disabled to preserve spoti.pw lyrics.\nVisual effects remain off at launch; explicitly apply a style each session.\n' "$EEVEE_COMMIT" "$BASE_RUN_ID" "$GITHUB_RUN_ID" "$GITHUB_SHA" > out/BUILD-INFO.txt
 
       - uses: actions/upload-artifact@v5
         with:
-          name: spoti-visuals-recovery
+          name: spoti-reincarnated
           path: out/*
           if-no-files-found: error
           retention-days: 30
