@@ -77,7 +77,7 @@ jobs:
           sdk="$(xcrun --sdk iphoneos --show-sdk-path)"
           mkdir -p "$THEOS/sdks"
           ln -s "$sdk" "$THEOS/sdks/$(basename "$sdk")"
-          ipapatch --help >/dev/null
+          "$RUNNER_TEMP/ipapatch" --help >/dev/null
 
       - name: Prepare Reincarnated and add spoti.pw tools
         run: python3 integrations/eevee/prepare_eevee.py deps/eevee
