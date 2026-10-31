@@ -82,7 +82,7 @@ struct SpotiVisualsView: View {
                     Button { select(choice) } label: {
                         Label("Apply selected style", systemImage: "sparkles")
                     }
-                    .tint(choice.accent)
+                    .accentColor(choice.accent)
                 }
             } footer: {
                 Text("Requires iOS 26 and Redesigned UI. To enable it, hold Home → Mod Settings → Appearance → Redesigned UI, then restart Spotify once. These visual style controls apply without another restart.")
@@ -117,7 +117,6 @@ struct SpotiVisualsView: View {
                     .buttonStyle(.plain)
                     .listRowInsets(EdgeInsets(top: 7, leading: 0, bottom: 7, trailing: 0))
                     .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel("\(style.title). \(style.detail).")
                     .accessibilityAddTraits(choice == style ? .isSelected : [])
@@ -130,10 +129,10 @@ struct SpotiVisualsView: View {
                         Text("Intensity")
                         Spacer()
                         Text("\(Int((intensity * 100).rounded()))%")
-                            .monospacedDigit().foregroundColor(.secondary)
+                            .font(.system(.body, design: .monospaced)).foregroundColor(.secondary)
                     }
                     Slider(value: intensityBinding, in: 0...1, step: 0.05)
-                        .tint(choice.accent)
+                        .accentColor(choice.accent)
                         .accessibilityLabel("Visual intensity")
                         .accessibilityValue("\(Int((intensity * 100).rounded())) percent")
                     HStack {
@@ -149,7 +148,7 @@ struct SpotiVisualsView: View {
                 Toggle(isOn: motionBinding) {
                     Label("Gentle motion", systemImage: "wind")
                 }
-                .tint(choice.accent)
+                .accentColor(choice.accent)
                 .disabled(choice == .off || choice == .glass)
             }
         }
@@ -241,9 +240,7 @@ private struct SpotiVisualIllustration: View {
                             Capsule().fill(.white.opacity(0.30)).frame(width: 49, height: 4)
                         }
                         Capsule().fill(.white.opacity(0.12)).frame(height: 3)
-                            .overlay(alignment: .leading) {
-                                Capsule().fill(style.accent).frame(width: 31, height: 3)
-                            }
+                            .overlay(Capsule().fill(style.accent).frame(width: 31, height: 3), alignment: .leading)
                         HStack(spacing: 20) {
                             Image(systemName: "backward.end.fill").font(.system(size: 11))
                             Image(systemName: "play.fill").font(.system(size: 19))
@@ -253,14 +250,14 @@ private struct SpotiVisualIllustration: View {
                     }
                     .frame(width: 98)
                     .padding(14)
-                    .background {
+                    .background(Group {
                         if style == .glass {
                             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                .fill(.ultraThinMaterial)
+                                .fill(Color.white.opacity(0.055))
                                 .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
                                     .strokeBorder(.white.opacity(0.11 + intensity * 0.17)))
                         }
-                    }
+                    })
                 }
             }
             .clipped()
@@ -281,7 +278,7 @@ private struct SpotiVisualIllustration: View {
             Ellipse().fill(Color.purple.opacity(strength))
                 .frame(width: width * 0.7, height: 130).blur(radius: 32)
                 .offset(x: -width * 0.25, y: 24)
-            Ellipse().fill(Color.cyan.opacity(strength * 0.75))
+            Ellipse().fill(Color(red: 0.0, green: 0.82, blue: 1.0).opacity(strength * 0.75))
                 .frame(width: width * 0.45, height: 65).blur(radius: 30)
                 .offset(x: width * 0.28, y: -38)
             Capsule().fill(Color.purple.opacity(strength)).frame(width: 2, height: 95)
